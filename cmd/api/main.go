@@ -45,16 +45,33 @@ func main() {
 
 	r.Get("/health", healthHandler(db))
 
-	// Users API (full paths so /api/v1/users and /api/v1/users/ both work)
 	userRepo := repository.NewUserRepository(db)
 	userSvc := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userSvc)
+	taskRepo := repository.NewTaskRepository(db)
+	taskSvc := service.NewTaskService(taskRepo, userRepo)
+	taskHandler := handler.NewTaskHandler(taskSvc)
+	authHandler := handler.NewAuthHandler(userSvc, cfg.JWTSecret, cfg.JWTExpiryHours)
+
+	// Public routes (no JWT)
+	r.Post("/api/v1/login", authHandler.Login)
 	r.Post("/api/v1/users", userHandler.Create)
-	r.Get("/api/v1/users", userHandler.List)
-	r.Post("/api/v1/users/{id}/reset-password", userHandler.ResetPassword)
-	r.Get("/api/v1/users/{id}", userHandler.GetByID)
-	r.Put("/api/v1/users/{id}", userHandler.Update)
-	r.Delete("/api/v1/users/{id}", userHandler.Delete)
+
+	// Protected routes (JWT required)
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Get("/users", userHandler.List)
+		r.Post("/users/{id}/tasks", taskHandler.Create)
+		r.Get("/users/{id}/tasks", taskHandler.ListByUser)
+		r.Post("/users/{id}/reset-password", userHandler.ResetPassword)
+		r.Get("/users/{id}", userHandler.GetByID)
+		r.Put("/users/{id}", userHandler.Update)
+		r.Delete("/users/{id}", userHandler.Delete)
+		r.Get("/tasks", taskHandler.ListAll)
+		r.Get("/tasks/{id}", taskHandler.GetByID)
+		r.Put("/tasks/{id}", taskHandler.Update)
+		r.Delete("/tasks/{id}", taskHandler.Delete)
+	})
 
 	addr := ":" + strconv.Itoa(cfg.Port)
 	server := &http.Server{Addr: addr, Handler: r}

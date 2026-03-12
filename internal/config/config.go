@@ -9,13 +9,16 @@ import (
 
 // Config holds application configuration loaded from environment.
 type Config struct {
-	Port   int    // HTTP server port
-	DBPath string // Path to SQLite database file
+	Port          int    // HTTP server port
+	DBPath        string // Path to SQLite database file
+	JWTSecret     string // Secret for signing JWTs
+	JWTExpiryHours int   // Token validity in hours
 }
 
 const (
-	defaultPort   = 8082
-	defaultDBPath = "./data/app.db"
+	defaultPort         = 8082
+	defaultDBPath       = "./data/app.db"
+	defaultJWTExpiryHours = 24
 )
 
 // Load reads configuration from environment.
@@ -36,8 +39,18 @@ func Load() (*Config, error) {
 		dbPath = v
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	jwtExpiry := defaultJWTExpiryHours
+	if v := os.Getenv("JWT_EXPIRY_HOURS"); v != "" {
+		if e, err := strconv.Atoi(v); err == nil && e > 0 {
+			jwtExpiry = e
+		}
+	}
+
 	return &Config{
-		Port:   port,
-		DBPath: dbPath,
+		Port:           port,
+		DBPath:         dbPath,
+		JWTSecret:      jwtSecret,
+		JWTExpiryHours: jwtExpiry,
 	}, nil
 }

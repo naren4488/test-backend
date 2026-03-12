@@ -3,6 +3,7 @@ package service
 import (
 	"test-backend/internal/model"
 	"test-backend/internal/repository"
+	apperr "test-backend/pkg/errors"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -28,8 +29,20 @@ func (s *UserService) Create(req *model.CreateUserRequest) (*model.User, error) 
 	return s.repo.Create(req.Email, req.Name, string(hash))
 }
 
-// GetByID returns the user by ID or ErrNotFound.
-func (s *UserService) GetByID(id int64) (*model.User, error) {
+// Login validates email and password and returns the user or ErrUnauthorized.
+func (s *UserService) Login(email, password string) (*model.User, error) {
+	u, err := s.repo.GetByEmail(email)
+	if err != nil || u == nil {
+		return nil, apperr.NewUnauthorized("Invalid email or password.")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
+		return nil, apperr.NewUnauthorized("Invalid email or password.")
+	}
+	return u, nil
+}
+
+// GetByID returns the user by ID (UUID) or ErrNotFound.
+func (s *UserService) GetByID(id string) (*model.User, error) {
 	return s.repo.GetByID(id)
 }
 
@@ -39,17 +52,17 @@ func (s *UserService) List() ([]*model.User, error) {
 }
 
 // Update updates the user by ID. Returns ErrNotFound or Conflict.
-func (s *UserService) Update(id int64, req *model.UpdateUserRequest) (*model.User, error) {
+func (s *UserService) Update(id string, req *model.UpdateUserRequest) (*model.User, error) {
 	return s.repo.Update(id, req.Name, req.Email)
 }
 
 // Delete deletes the user by ID. Returns ErrNotFound.
-func (s *UserService) Delete(id int64) error {
+func (s *UserService) Delete(id string) error {
 	return s.repo.Delete(id)
 }
 
 // ResetPassword sets a new password for the user. Returns ErrNotFound.
-func (s *UserService) ResetPassword(id int64, newPassword string) error {
+func (s *UserService) ResetPassword(id string, newPassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcryptCost)
 	if err != nil {
 		return err

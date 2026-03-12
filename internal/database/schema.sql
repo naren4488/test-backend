@@ -1,6 +1,10 @@
--- Users table: id, email, name, password_hash, timestamps
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+-- UUID-based IDs. Drop existing tables so new schema applies (existing data will be lost).
+DROP TABLE IF EXISTS tasks;
+DROP TABLE IF EXISTS users;
+
+-- Users table: id (UUID), email, name, password_hash, timestamps
+CREATE TABLE users (
+    id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL DEFAULT '',
     password_hash TEXT NOT NULL DEFAULT '',
@@ -8,10 +12,10 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tasks table: id, user_id (FK), title, description, status, timestamps
-CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
+-- Tasks table: id (UUID), user_id (UUID FK), title, description, status, timestamps
+CREATE TABLE tasks (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'pending',
@@ -20,5 +24,5 @@ CREATE TABLE IF NOT EXISTS tasks (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
+CREATE INDEX idx_tasks_user_id ON tasks(user_id);
+CREATE INDEX idx_tasks_status ON tasks(status);

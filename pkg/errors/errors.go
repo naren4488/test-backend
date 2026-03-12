@@ -54,6 +54,22 @@ func NewValidation(message string) *AppError {
 	return &AppError{Code: "VALIDATION_ERROR", Message: message, StatusCode: 400}
 }
 
+// NewUnauthorized returns a 401 Unauthorized error (e.g. invalid or missing token).
+func NewUnauthorized(message string) *AppError {
+	if message == "" {
+		message = "Authentication required."
+	}
+	return &AppError{Code: "UNAUTHORIZED", Message: message, StatusCode: 401}
+}
+
+// NewForbidden returns a 403 Forbidden error (e.g. not allowed to access resource).
+func NewForbidden(message string) *AppError {
+	if message == "" {
+		message = "You do not have permission to access this resource."
+	}
+	return &AppError{Code: "FORBIDDEN", Message: message, StatusCode: 403}
+}
+
 // AsAppError returns *AppError if err is or wraps an AppError; otherwise nil.
 func AsAppError(err error) *AppError {
 	if err == nil {

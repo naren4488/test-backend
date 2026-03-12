@@ -6,6 +6,8 @@ import (
 
 	"test-backend/internal/model"
 	apperr "test-backend/pkg/errors"
+
+	"github.com/google/uuid"
 )
 
 // UserRepository performs user DB operations.
@@ -18,11 +20,12 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// Create inserts a user and returns it with ID and timestamps.
+// Create inserts a user with a new UUID and returns it.
 func (r *UserRepository) Create(email, name, passwordHash string) (*model.User, error) {
-	res, err := r.db.Exec(
-		`INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?)`,
-		email, name, passwordHash,
+	id := uuid.New().String()
+	_, err := r.db.Exec(
+		`INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)`,
+		id, email, name, passwordHash,
 	)
 	if err != nil {
 		if isSQLiteUnique(err) {
@@ -30,12 +33,11 @@ func (r *UserRepository) Create(email, name, passwordHash string) (*model.User, 
 		}
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	return r.GetByID(id)
 }
 
-// GetByID returns the user by ID or ErrNotFound.
-func (r *UserRepository) GetByID(id int64) (*model.User, error) {
+// GetByID returns the user by ID (UUID) or ErrNotFound.
+func (r *UserRepository) GetByID(id string) (*model.User, error) {
 	var u model.User
 	err := r.db.QueryRow(
 		`SELECT id, email, name, password_hash, created_at, updated_at FROM users WHERE id = ?`,
@@ -87,7 +89,7 @@ func (r *UserRepository) List() ([]*model.User, error) {
 }
 
 // Update updates name and/or email for the user by ID. Returns ErrNotFound if not found.
-func (r *UserRepository) Update(id int64, name, email *string) (*model.User, error) {
+func (r *UserRepository) Update(id string, name, email *string) (*model.User, error) {
 	var set string
 	var args []any
 	if name != nil {
@@ -121,7 +123,7 @@ func (r *UserRepository) Update(id int64, name, email *string) (*model.User, err
 }
 
 // Delete removes the user by ID. Returns ErrNotFound if not found.
-func (r *UserRepository) Delete(id int64) error {
+func (r *UserRepository) Delete(id string) error {
 	res, err := r.db.Exec(`DELETE FROM users WHERE id = ?`, id)
 	if err != nil {
 		return err
@@ -134,7 +136,7 @@ func (r *UserRepository) Delete(id int64) error {
 }
 
 // UpdatePassword sets the password hash for the user by ID. Returns ErrNotFound if not found.
-func (r *UserRepository) UpdatePassword(id int64, passwordHash string) error {
+func (r *UserRepository) UpdatePassword(id string, passwordHash string) error {
 	res, err := r.db.Exec(`UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, passwordHash, id)
 	if err != nil {
 		return err

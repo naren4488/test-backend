@@ -3,9 +3,9 @@ package model
 import "time"
 
 // User is the domain model for a user (matches DB row).
-// PasswordHash is never serialized to JSON.
+// ID is a UUID. PasswordHash is never serialized to JSON.
 type User struct {
-	ID           int64     `json:"id"`
+	ID           string    `json:"id"`
 	Email        string    `json:"email"`
 	Name         string    `json:"name"`
 	PasswordHash string    `json:"-"`

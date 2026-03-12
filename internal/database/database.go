@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -39,9 +40,14 @@ func New(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("read schema: %w", err)
 	}
 
-	if _, err := db.Exec(string(schema)); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("exec schema: %w", err)
+	for _, stmt := range splitStatements(string(schema)) {
+		if stmt == "" {
+			continue
+		}
+		if _, err := db.Exec(stmt); err != nil {
+			_ = db.Close()
+			return nil, fmt.Errorf("exec schema: %w", err)
+		}
 	}
 
 	return db, nil
@@ -49,4 +55,26 @@ func New(dbPath string) (*sql.DB, error) {
 
 func ensureDir(dir string) error {
 	return os.MkdirAll(dir, 0755)
+}
+
+// splitStatements returns non-empty SQL statements (split by ";"), trimmed of whitespace and comment-only lines.
+func splitStatements(schema string) []string {
+	var out []string
+	for _, s := range strings.Split(schema, ";") {
+		stmt := strings.TrimSpace(s)
+		// Skip empty and comment-only blocks
+		lines := strings.Split(stmt, "\n")
+		var nonComment []string
+		for _, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" || strings.HasPrefix(trimmed, "--") {
+				continue
+			}
+			nonComment = append(nonComment, line)
+		}
+		if len(nonComment) > 0 {
+			out = append(out, strings.Join(nonComment, "\n"))
+		}
+	}
+	return out
 }

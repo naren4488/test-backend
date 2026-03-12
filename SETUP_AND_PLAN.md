@@ -10,6 +10,13 @@ You will build a **REST API** in Go with:
 **Database**: SQLite (single file, no server, free, perfect for local learning).  
 **Scope**: Local only, learning; no deployment or production hardening.
 
+### Current implementation status
+
+- **Phases 1–4** and **JWT auth** are implemented.
+- **IDs**: All user and task IDs are **UUIDs** (TEXT in DB).
+- **Auth**: `POST /api/v1/login` returns a JWT; protected routes require `Authorization: Bearer <token>`. Owner checks enforce that users can only access their own user and tasks.
+- **Docs**: [README.md](README.md) for run and env; [API_CURL_EXAMPLES.md](API_CURL_EXAMPLES.md) for all endpoints and example curls.
+
 ---
 
 ## 2. Tech Stack
@@ -22,6 +29,7 @@ You will build a **REST API** in Go with:
 | DB driver   | `modernc.org/sqlite`      | Pure Go SQLite, no C compiler needed |
 | Validation  | `go-playground/validator` | Struct tags, clear errors |
 | Config      | Env vars + `.env` (e.g. `godotenv`) | Simple for local |
+| Auth        | **JWT** (e.g. `golang-jwt/jwt/v5`)   | Login returns token; protected routes validate Bearer token |
 
 ---
 
@@ -40,9 +48,10 @@ test-backend/
 │   │   └── schema.sql           # Embedded CREATE TABLE statements
 │   ├── middleware/
 │   │   ├── middleware.go        # Recover, logger, request ID
-│   │   └── ...
+│   │   └── auth.go              # JWT validation, set user ID in context
 │   ├── handler/
-│   │   ├── handler.go           # Base / shared handler helpers
+│   │   ├── auth.go              # Login (issue JWT)
+│   │   ├── uuid.go              # Parse UUID from path param
 │   │   ├── user.go              # User HTTP handlers
 │   │   └── task.go              # Task HTTP handlers
 │   ├── service/
@@ -63,6 +72,7 @@ test-backend/
 ├── go.sum
 ├── .env.example
 ├── README.md
+├── API_CURL_EXAMPLES.md         # All endpoints and example curls
 └── SETUP_AND_PLAN.md            # This file
 ```
 
@@ -89,33 +99,41 @@ We will create the schema in `internal/database/schema.sql` (embedded) and run i
 
 ## 5. API Contract (Summary)
 
-### Users
+All IDs are **UUIDs**. Protected routes require header: `Authorization: Bearer <token>` (from login).
+
+### Public (no auth)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST   | `/api/v1/users`           | Create user |
+| GET    | `/health`                | Health check |
+| POST   | `/api/v1/login`          | Login (body: email, password) → JWT |
+| POST   | `/api/v1/users`          | Create user (register) |
+
+### Users (protected; self only for get/update/delete/reset-password)
+
+| Method | Path | Description |
+|--------|------|-------------|
 | GET    | `/api/v1/users`           | List all users |
-| GET    | `/api/v1/users/:id`       | Get user by ID |
-| PUT    | `/api/v1/users/:id`       | Update user |
-| DELETE | `/api/v1/users/:id`       | Delete user |
-| POST   | `/api/v1/users/:id/reset-password` | Reset password (body: new password) |
+| GET    | `/api/v1/users/:id`       | Get user by ID (own only) |
+| PUT    | `/api/v1/users/:id`       | Update user (own only) |
+| DELETE | `/api/v1/users/:id`       | Delete user (own only) |
+| POST   | `/api/v1/users/:id/reset-password` | Reset password (own only) |
 
-### Tasks
+### Tasks (protected; own tasks only)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST   | `/api/v1/users/:id/tasks` | Create task for user |
-| GET    | `/api/v1/users/:id/tasks` | List all tasks for user |
-| GET    | `/api/v1/tasks`           | List all tasks (paginated, optional search) |
-| GET    | `/api/v1/tasks/:id`       | Get task by ID |
-| PUT    | `/api/v1/tasks/:id`       | Update task |
-| DELETE | `/api/v1/tasks/:id`       | Delete task |
+| POST   | `/api/v1/users/:id/tasks` | Create task for user (path id = self) |
+| GET    | `/api/v1/users/:id/tasks` | List tasks for user (path id = self) |
+| GET    | `/api/v1/tasks`           | List my tasks (paginated, optional search) |
+| GET    | `/api/v1/tasks/:id`       | Get task by ID (own only) |
+| PUT    | `/api/v1/tasks/:id`       | Update task (own only) |
+| DELETE | `/api/v1/tasks/:id`       | Delete task (own only) |
 
-Query params for **List all tasks**:
+Query params for **List tasks** (`GET /api/v1/tasks`):
 
-- `page`, `limit` (or `per_page`) for pagination.
-- `search` (optional): filter by title/description.
-- Optional: `user_id` to filter by user.
+- `page`, `limit` for pagination.
+- `search`: filter by title/description.
 
 ---
 
@@ -131,6 +149,7 @@ Query params for **List all tasks**:
   ```
 
 - **Validation errors** (from `validator`): return 400 with a list of field errors.
+- **Auth**: `NewUnauthorized` (401), `NewForbidden` (403) for missing/invalid token or access to another user’s resource.
 
 ---
 
@@ -165,9 +184,9 @@ No database server install: only Go and these packages.
 ### 7.5 Environment
 
 - `.env.example` with:
-  - `PORT=8080`
-  - `DB_PATH=./data/app.db`
-- Copy to `.env` and adjust if needed. App reads `PORT` and `DB_PATH` from env.
+  - `PORT=8082`, `DB_PATH=./data/app.db`
+  - `JWT_SECRET` (required for login and protected routes), `JWT_EXPIRY_HOURS` (default 24)
+- Copy to `.env` and adjust if needed. App loads `.env` if present.
 
 ### 7.6 Run
 
@@ -228,14 +247,11 @@ We will implement in small steps so you can run and test after each phase.
 
 ---
 
-## 9. Next Step
+## 9. Reference
 
-Once you’ve read this and confirmed:
+Phases 1–4 and JWT auth are **implemented**. Use:
 
-1. You have Go 1.21+ installed.  
-2. You’re fine with SQLite and the folder structure above.  
-3. You’re fine with the API paths and phases.  
+- **[README.md](README.md)** — how to run, env vars, quick health check.
+- **[API_CURL_EXAMPLES.md](API_CURL_EXAMPLES.md)** — every endpoint with example curls and auth notes.
 
-We’ll start with **Phase 1**: create the repo structure, `go.mod`, config, database connection, schema, main with health route and middleware. After that we’ll move slowly through Phase 2 (Users), then Phase 3 (Tasks), then Phase 4 (polish).
-
-If you want to change anything (e.g. different router, add JWT later, or different error format), say so before we start Phase 1.
+Possible next steps: tests, OpenAPI spec, Docker, or extra features (e.g. soft delete, task due dates).

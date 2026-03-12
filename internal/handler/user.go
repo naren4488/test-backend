@@ -4,14 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 
+	"test-backend/internal/middleware"
 	"test-backend/internal/model"
 	"test-backend/internal/response"
 	"test-backend/internal/service"
 	apperr "test-backend/pkg/errors"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -60,9 +59,12 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // GetByID handles GET /api/v1/users/:id.
 func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id <= 0 {
-		response.Error(w, apperr.NewBadRequest("Invalid user ID. Must be a positive integer."))
+	id, ok := parseUUIDParam(r, "id")
+	if !ok {
+		response.Error(w, apperr.NewBadRequest("Invalid user ID. Must be a valid UUID."))
+		return
+	}
+	if !requireSelf(w, r, id) {
 		return
 	}
 	user, err := h.svc.GetByID(id)
@@ -75,9 +77,12 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /api/v1/users/:id.
 func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id <= 0 {
-		response.Error(w, apperr.NewBadRequest("Invalid user ID. Must be a positive integer."))
+	id, ok := parseUUIDParam(r, "id")
+	if !ok {
+		response.Error(w, apperr.NewBadRequest("Invalid user ID. Must be a valid UUID."))
+		return
+	}
+	if !requireSelf(w, r, id) {
 		return
 	}
 	var req model.UpdateUserRequest
@@ -99,9 +104,12 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // Delete handles DELETE /api/v1/users/:id.
 func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id <= 0 {
-		response.Error(w, apperr.NewBadRequest("Invalid user ID. Must be a positive integer."))
+	id, ok := parseUUIDParam(r, "id")
+	if !ok {
+		response.Error(w, apperr.NewBadRequest("Invalid user ID. Must be a valid UUID."))
+		return
+	}
+	if !requireSelf(w, r, id) {
 		return
 	}
 	if err := h.svc.Delete(id); err != nil {
@@ -113,9 +121,12 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // ResetPassword handles POST /api/v1/users/:id/reset-password.
 func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id <= 0 {
-		response.Error(w, apperr.NewBadRequest("Invalid user ID. Must be a positive integer."))
+	id, ok := parseUUIDParam(r, "id")
+	if !ok {
+		response.Error(w, apperr.NewBadRequest("Invalid user ID. Must be a valid UUID."))
+		return
+	}
+	if !requireSelf(w, r, id) {
 		return
 	}
 	var req model.ResetPasswordRequest
@@ -148,4 +159,18 @@ func validationErrors(err error) map[string]string {
 		fields[e.Field()] = e.Tag()
 	}
 	return fields
+}
+
+// requireSelf checks that the path user id matches the authenticated user. Returns false and writes 403 if not.
+func requireSelf(w http.ResponseWriter, r *http.Request, pathUserID string) bool {
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		response.Error(w, apperr.NewUnauthorized("Authentication required."))
+		return false
+	}
+	if pathUserID != userID {
+		response.Error(w, apperr.NewForbidden("You can only access your own resources."))
+		return false
+	}
+	return true
 }
