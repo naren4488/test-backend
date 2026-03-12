@@ -3,16 +3,18 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
 
 // Config holds application configuration loaded from environment.
 type Config struct {
-	Port          int    // HTTP server port
-	DBPath        string // Path to SQLite database file
-	JWTSecret     string // Secret for signing JWTs
-	JWTExpiryHours int   // Token validity in hours
+	Port             int      // HTTP server port
+	DBPath           string   // Path to SQLite database file
+	JWTSecret        string   // Secret for signing JWTs
+	JWTExpiryHours   int      // Token validity in hours
+	CORSAllowedOrigins []string // Allowed CORS origins (e.g. http://localhost:3000)
 }
 
 const (
@@ -47,10 +49,24 @@ func Load() (*Config, error) {
 		}
 	}
 
+	corsOrigins := []string{
+		"http://localhost:3000",
+		"http://localhost:5173",
+		"http://127.0.0.1:3000",
+		"http://127.0.0.1:5173",
+	}
+	if v := os.Getenv("CORS_ORIGINS"); v != "" {
+		corsOrigins = strings.Split(strings.TrimSpace(v), ",")
+		for i := range corsOrigins {
+			corsOrigins[i] = strings.TrimSpace(corsOrigins[i])
+		}
+	}
+
 	return &Config{
-		Port:           port,
-		DBPath:         dbPath,
-		JWTSecret:      jwtSecret,
-		JWTExpiryHours: jwtExpiry,
+		Port:               port,
+		DBPath:             dbPath,
+		JWTSecret:          jwtSecret,
+		JWTExpiryHours:     jwtExpiry,
+		CORSAllowedOrigins: corsOrigins,
 	}, nil
 }

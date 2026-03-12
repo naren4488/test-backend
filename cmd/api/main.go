@@ -20,6 +20,7 @@ import (
 	"test-backend/internal/service"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 )
 
 func main() {
@@ -37,6 +38,16 @@ func main() {
 	defer db.Close()
 
 	r := chi.NewRouter()
+
+	// CORS: allow frontend origins (must be before other middleware so OPTIONS gets CORS headers)
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Requested-With", "X-Request-ID"},
+		ExposedHeaders:   []string{"X-Request-ID"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 
 	// Middleware: request ID first (so logger can use it), then logger, then recoverer
 	r.Use(middleware.RequestID)
